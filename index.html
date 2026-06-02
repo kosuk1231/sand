@@ -25,18 +25,49 @@
 html,body{margin:0;height:100%;}
 body{
   font-family:'Gowun Dodum',sans-serif;
-  background:var(--coral);
+  background:
+    radial-gradient(circle at 18% 22%, #f29a89 0, transparent 38%),
+    radial-gradient(circle at 82% 78%, #e96952 0, transparent 42%),
+    var(--coral);
   color:var(--ink);
   overflow:hidden;
   -webkit-user-select:none;user-select:none;
   display:flex;align-items:center;justify-content:center;
   padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
 }
+/* PC 등 넓은 화면: 앱을 폰처럼 라운드+그림자로 감싸고 양옆 브랜드 텍스트 */
+@media (min-width:560px){
+  body{padding:24px 0;}
+  #app{
+    border-radius:28px;
+    box-shadow:0 24px 60px rgba(0,0,0,.32), 0 0 0 8px #ffffff14;
+    height:calc(100% - 48px);
+  }
+  body::before, body::after{
+    content:"";position:fixed;top:0;bottom:0;width:30vw;pointer-events:none;
+    background-repeat:repeat;background-size:42px 42px;opacity:.18;
+    background-image:linear-gradient(#ffffff55 1px, transparent 1px);
+  }
+  body::before{left:0;}
+  body::after{right:0;}
+  .pc-side{
+    position:fixed;top:50%;transform:translateY(-50%);
+    font-family:'Black Han Sans',sans-serif;color:#ffffff;opacity:.92;
+    font-size:clamp(20px,2.4vw,40px);line-height:1.15;pointer-events:none;
+    text-shadow:0 2px 8px rgba(0,0,0,.18);z-index:0;
+  }
+  .pc-side.left{left:max(20px,calc(50% - 560px));text-align:right;right:auto;max-width:22vw;}
+  .pc-side.right{right:max(20px,calc(50% - 560px));left:auto;text-align:left;max-width:22vw;}
+}
+@media (max-width:559px){ .pc-side{display:none;} }
+.pc-copy{font-family:'Gowun Dodum',sans-serif;font-size:clamp(12px,1.1vw,16px);
+  font-weight:400;opacity:.9;letter-spacing:.3px;}
 #app{
   position:relative;
   width:100%;max-width:460px;height:100%;max-height:920px;
   background:var(--green);
   display:flex;flex-direction:column;overflow:hidden;
+  z-index:1;
 }
 .screen{
   position:absolute;inset:0;
@@ -157,7 +188,7 @@ body{
   animation:nextPulse 1.1s ease-in-out infinite;
 }
 @keyframes nextPulse{0%,100%{transform:scale(1);}50%{transform:scale(1.05);}}
-.np-emoji{font-size:34px;line-height:1;filter:drop-shadow(0 2px 1px rgba(0,0,0,.15));}
+.np-emoji{width:38px;height:38px;line-height:1;flex-shrink:0;filter:drop-shadow(0 2px 1px rgba(0,0,0,.15));}
 .np-text{display:flex;flex-direction:column;line-height:1.1;}
 .np-text small{font-family:'Gowun Dodum';font-weight:400;color:#fff;background:var(--green);
   border-radius:6px;padding:1px 7px;font-size:11px;letter-spacing:1px;align-self:flex-start;margin-bottom:3px;}
@@ -219,6 +250,8 @@ body{
 </style>
 </head>
 <body>
+<div class="pc-side left" aria-hidden="true">샌드위치<br>사회복지사<br>생존기술</div>
+<div class="pc-side right" aria-hidden="true">🥪<br><span class="pc-copy">ⓒ carpediemkosuk</span></div>
 <div id="app">
   <button id="muteBtn" aria-label="소리 켜기/끄기">🔊</button>
 
@@ -257,7 +290,7 @@ body{
       <div class="hud-right"><div class="timer" id="timer">0.0s</div>COMBO ×<span id="combo">1</span></div>
     </div>
     <div id="nextbar">
-      <div class="nextpill" id="nextPill"><span class="np-emoji" id="nextEmoji">🥬</span><div class="np-text"><small>다음 재료</small><span class="np-name" id="nextName">양상추</span></div></div>
+      <div class="nextpill" id="nextPill"><canvas class="np-emoji" id="nextIcon" width="80" height="80"></canvas><div class="np-text"><small>다음 재료</small><span class="np-name" id="nextName">양상추</span></div></div>
     </div>
     <div id="progress"></div>
     <canvas id="gameCanvas"></canvas>
@@ -363,6 +396,7 @@ function newGame(){
 const drawHelpers = {
   roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
 };
+function roundRectOn(C,x,y,w,h,r){ C.beginPath(); C.moveTo(x+r,y); C.arcTo(x+w,y,x+w,y+h,r); C.arcTo(x+w,y+h,x,y+h,r); C.arcTo(x,y+h,x,y,r); C.arcTo(x,y,x+w,y,r); C.closePath(); }
 
 /* notebook playfield bg */
 function drawBackground(){
@@ -373,15 +407,101 @@ function drawBackground(){
   ctx.beginPath(); ctx.moveTo(34,110); ctx.lineTo(34,H); ctx.stroke();
 }
 
-function drawDisc(x,y,r,color,emoji){
+/* ---- 재료 아이콘: 이모지 대신 캔버스 도형으로 직접 그림 (모든 기기 동일) ---- */
+function drawIngIcon(key, x, y, s, _ctx){ // s=크기, _ctx=대상 컨텍스트(옵션)
+  const C = _ctx || ctx;
+  C.save(); C.translate(x,y);
+  C.lineJoin='round'; C.lineCap='round';
+  if(key==='lettuce'){
+    C.fillStyle='#8bc34a';
+    for(let i=0;i<7;i++){ const a=i/7*Math.PI*2; C.beginPath();
+      C.ellipse(Math.cos(a)*s*0.28, Math.sin(a)*s*0.18, s*0.34, s*0.26, a, 0, 7); C.fill(); }
+    C.fillStyle='#aed581'; C.beginPath(); C.ellipse(0,0,s*0.4,s*0.3,0,0,7); C.fill();
+  } else if(key==='chicken'){ // 닭가슴살(구운 필레)
+    C.fillStyle='#e8c08d'; C.beginPath(); C.ellipse(0,0,s*0.5,s*0.34,0,0,7); C.fill();
+    C.strokeStyle='#b5854f'; C.lineWidth=s*0.07;
+    for(let i=-1;i<=1;i++){ C.beginPath(); C.moveTo(-s*0.34,i*s*0.16); C.lineTo(s*0.34,i*s*0.16); C.stroke(); }
+  } else if(key==='bacon'){ // 베이컨(물결 줄무늬)
+    C.fillStyle='#c0392b';
+    C.beginPath(); C.moveTo(-s*0.5,-s*0.22);
+    for(let i=0;i<=8;i++){ const px=-s*0.5+i/8*s; C.lineTo(px, -s*0.22+Math.sin(i*0.9)*s*0.08); }
+    C.lineTo(s*0.5,s*0.22);
+    for(let i=8;i>=0;i--){ const px=-s*0.5+i/8*s; C.lineTo(px, s*0.22+Math.sin(i*0.9)*s*0.08); }
+    C.closePath(); C.fill();
+    C.fillStyle='#f0d2c4'; C.lineWidth=0;
+    for(let k=-1;k<=1;k+=2){ C.beginPath();
+      for(let i=0;i<=8;i++){ const px=-s*0.5+i/8*s; const yy=k*s*0.1+Math.sin(i*0.9)*s*0.08; (i===0?C.moveTo(px,yy):C.lineTo(px,yy)); }
+      C.lineWidth=s*0.07; C.strokeStyle='#f0d2c4'; C.stroke(); }
+  } else if(key==='tomato'){
+    C.fillStyle='#e74c3c'; C.beginPath(); C.arc(0,0,s*0.46,0,7); C.fill();
+    C.fillStyle='#ff7c6b'; C.beginPath(); C.arc(0,0,s*0.3,0,7); C.fill();
+    C.fillStyle='#ffd0c7'; for(let i=0;i<5;i++){ const a=i/5*Math.PI*2; C.beginPath();
+      C.ellipse(Math.cos(a)*s*0.16, Math.sin(a)*s*0.16, s*0.06, s*0.1, a, 0, 7); C.fill(); }
+  } else if(key==='cucumber'){
+    C.fillStyle='#2e9e5b'; C.beginPath(); C.arc(0,0,s*0.46,0,7); C.fill();
+    C.fillStyle='#9cd6a6'; C.beginPath(); C.arc(0,0,s*0.34,0,7); C.fill();
+    C.fillStyle='#cdeccf'; for(let i=0;i<6;i++){ const a=i/6*Math.PI*2; C.beginPath();
+      C.ellipse(Math.cos(a)*s*0.14, Math.sin(a)*s*0.14, s*0.05, s*0.08, a, 0, 7); C.fill(); }
+  } else if(key==='cheese'){
+    C.fillStyle='#f3c623'; roundRectOn(C,-s*0.45,-s*0.32,s*0.9,s*0.64,s*0.1); C.fill();
+    C.fillStyle='#e3a008cc';
+    [[-.15,-.1,.09],[.2,.05,.07],[-.05,.15,.06],[.15,-.18,.05]].forEach(h=>{
+      C.beginPath(); C.arc(h[0]*s,h[1]*s,h[2]*s,0,7); C.fill(); });
+  } else if(key==='topbun'||key==='bun'){
+    C.fillStyle='#e0a060'; C.beginPath();
+    C.moveTo(-s*0.5,s*0.22); C.quadraticCurveTo(-s*0.5,-s*0.4,0,-s*0.4);
+    C.quadraticCurveTo(s*0.5,-s*0.4,s*0.5,s*0.22); C.closePath(); C.fill();
+    C.fillStyle='#cd853f'; roundRectOn(C,-s*0.5,s*0.16,s,s*0.12,s*0.06); C.fill();
+    C.fillStyle='#fff7e8'; [[-.2,-.05],[.05,-.18],[.22,-.02],[-.05,.04]].forEach(p=>{
+      C.beginPath(); C.arc(p[0]*s,p[1]*s,s*0.03,0,7); C.fill(); });
+  }
+  C.restore();
+}
+
+/* ---- 키워드 6종 미니 아이콘 (보너스 칩용) ---- */
+function drawKwIcon(key, x, y, s, color){
+  ctx.save(); ctx.translate(x,y); ctx.lineJoin='round'; ctx.lineCap='round';
+  const c = color || '#444';
+  if(key==='디지털'){
+    ctx.fillStyle=c; drawHelpers.roundRect(-s*0.34,-s*0.26,s*0.68,s*0.42,s*0.05); ctx.fill();
+    ctx.fillStyle='#fff'; drawHelpers.roundRect(-s*0.28,-s*0.2,s*0.56,s*0.3,s*0.03); ctx.fill();
+    ctx.fillStyle=c; drawHelpers.roundRect(-s*0.44,s*0.16,s*0.88,s*0.1,s*0.05); ctx.fill();
+  } else if(key==='관계'){
+    ctx.fillStyle=c;
+    ctx.beginPath(); ctx.arc(-s*0.16,-s*0.12,s*0.14,0,7); ctx.fill();
+    ctx.beginPath(); ctx.arc(s*0.16,-s*0.12,s*0.14,0,7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(-s*0.16,s*0.2,s*0.2,s*0.16,0,Math.PI,0); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(s*0.16,s*0.2,s*0.2,s*0.16,0,Math.PI,0); ctx.fill();
+  } else if(key==='연구'){
+    ctx.strokeStyle=c; ctx.lineWidth=s*0.1; ctx.beginPath(); ctx.arc(-s*0.08,-s*0.08,s*0.22,0,7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(s*0.1,s*0.1); ctx.lineTo(s*0.3,s*0.3); ctx.stroke();
+  } else if(key==='기획'){
+    ctx.fillStyle=c; ctx.beginPath(); ctx.moveTo(-s*0.3,s*0.28); ctx.lineTo(s*0.3,s*0.28); ctx.lineTo(-s*0.3,-s*0.28); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.moveTo(-s*0.18,s*0.16); ctx.lineTo(s*0.06,s*0.16); ctx.lineTo(-s*0.18,-s*0.08); ctx.closePath(); ctx.fill();
+  } else if(key==='지역'){
+    ctx.fillStyle=c; ctx.beginPath();
+    ctx.arc(0,-s*0.06,s*0.24,Math.PI*0.85,Math.PI*0.15); ctx.lineTo(0,s*0.32); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(0,-s*0.06,s*0.1,0,7); ctx.fill();
+  } else if(key==='커리어'){
+    ctx.fillStyle=c; ctx.beginPath();
+    ctx.moveTo(0,-s*0.34); ctx.quadraticCurveTo(s*0.18,-s*0.05,s*0.14,s*0.2);
+    ctx.lineTo(-s*0.14,s*0.2); ctx.quadraticCurveTo(-s*0.18,-s*0.05,0,-s*0.34); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(0,-s*0.05,s*0.07,0,7); ctx.fill();
+    ctx.fillStyle=c; ctx.beginPath(); ctx.moveTo(-s*0.14,s*0.12); ctx.lineTo(-s*0.26,s*0.28); ctx.lineTo(-s*0.05,s*0.2); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(s*0.14,s*0.12); ctx.lineTo(s*0.26,s*0.28); ctx.lineTo(s*0.05,s*0.2); ctx.closePath(); ctx.fill();
+  } else {
+    ctx.fillStyle=c; ctx.beginPath(); ctx.arc(0,0,s*0.2,0,7); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawDisc(x,y,r,color,key){
   ctx.save();
   ctx.shadowColor='rgba(0,0,0,.18)'; ctx.shadowBlur=8; ctx.shadowOffsetY=3;
   ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.fill();
   ctx.restore();
-  ctx.fillStyle=color; ctx.beginPath(); ctx.arc(x,y,r-4,0,7); ctx.fill();
-  ctx.fillStyle='#ffffff22'; ctx.beginPath(); ctx.arc(x,y,r-4,Math.PI*1.1,Math.PI*1.6); ctx.lineTo(x,y); ctx.fill();
-  ctx.font = (r*1.15)+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText(emoji, x, y+1);
+  ctx.fillStyle=color+'33'; ctx.beginPath(); ctx.arc(x,y,r-4,0,7); ctx.fill();
+  drawIngIcon(key, x, y, r*1.5);
 }
 
 function drawBunBase(x,y,w){
@@ -408,8 +528,7 @@ function drawStack(){
     ctx.fillStyle=ing.color;
     drawHelpers.roundRect(x-(w-12)/2, ly, w-12, 22, 11); ctx.fill();
     ctx.restore();
-    ctx.font='16px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText(ing.emoji, x, ly+11);
+    drawIngIcon(ing.key, x, ly+11, 22);
   }
 }
 
@@ -502,7 +621,9 @@ function updateHUD(){
   $('#timer').textContent = state.elapsed.toFixed(1)+'s';
   const next = INGREDIENTS[state.targetIdx];
   if(next){
-    $('#nextEmoji').textContent=next.emoji; $('#nextName').textContent=next.name;
+    $('#nextName').textContent=next.name;
+    const ic=$('#nextIcon');
+    if(ic){ const c2=ic.getContext('2d'); c2.clearRect(0,0,80,80); drawIngIcon(next.key,40,40,56,c2); }
     const pill=$('#nextPill'); if(pill){ pill.style.borderColor=next.color; $('#nextName').style.color=next.color; }
   }
 }
@@ -594,12 +715,17 @@ function render(){
     // 안쪽 하이라이트
     ctx.fillStyle='#ffffff2e';
     drawHelpers.roundRect(wd.x-w/2+4, wd.y-h/2+3, w-8, h/2-2, (h/2-2)); ctx.fill();
+    // 왼쪽 아이콘 배지(흰 원 + 키워드 도형)
+    const ix = wd.x - w/2 + h*0.55, iy = wd.y;
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(ix, iy, h*0.34, 0, 7); ctx.fill();
+    drawKwIcon(wd.b.key||wd.b.word, ix, iy, h*0.46, wd.b.color);
+    // 글자
     ctx.fillStyle='#fff';
-    ctx.font="700 18px 'Gaegu', sans-serif"; ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText(wd.b.emoji+' '+wd.b.word, wd.x, wd.y+1);
+    ctx.font="700 18px 'Gaegu', sans-serif"; ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillText(wd.b.word, ix + h*0.5, wd.y+1);
   });
   // items
-  state.items.forEach(it=> drawDisc(it.x, it.y, it.r, it.ing.color, it.ing.emoji));
+  state.items.forEach(it=> drawDisc(it.x, it.y, it.r, it.ing.color, it.ing.key));
   // stack/catcher
   drawStack();
 }
