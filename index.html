@@ -153,8 +153,8 @@ body{
   background:#fff;color:var(--ink);outline:none;
 }
 #nameInput:focus{border-color:var(--coral);}
-.howto{font-size:12.5px;color:#7a8f84;line-height:1.7;margin:12px 2px 0;}
-.howto b{color:var(--green);}
+.howto{font-family:'Gowun Dodum',sans-serif;font-size:13.5px;color:#3e5249;line-height:1.95;margin:14px 2px 0;font-weight:400;}
+.howto b{color:var(--coral-dark);font-weight:700;}
 .btn{
   font-family:'Black Han Sans',sans-serif;font-size:19px;
   border:none;border-radius:14px;padding:15px;cursor:pointer;
@@ -180,6 +180,16 @@ body{
 .hud-score b{font-size:26px;display:block;line-height:1;}
 .hud-right{text-align:right;color:#dfeae3;font-size:12px;}
 .hud-right .timer{font-family:'Black Han Sans',sans-serif;font-size:20px;color:#fff;}
+.hud-lives{display:flex;gap:3px;align-items:center;justify-content:center;padding-top:0;flex-wrap:nowrap;}
+.hud-center{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding-top:2px;}
+.bonus-gauge{display:flex;gap:3px;align-items:center;}
+.bonus-gauge .seg{width:8px;height:8px;border-radius:50%;background:#ffffff33;transition:.2s;}
+.bonus-gauge .seg.on{background:#ffd9cf;box-shadow:0 0 5px #ffd9cf;}
+.bonus-gauge .glabel{color:#dfeae3;font-size:9px;margin-left:3px;letter-spacing:.3px;}
+.hud-lives .heart{width:18px;height:18px;transition:transform .2s, opacity .2s;}
+.hud-lives .heart.lost{opacity:.25;transform:scale(.8);}
+@keyframes heartPop{0%{transform:scale(1);}40%{transform:scale(1.4);}100%{transform:scale(1);}}
+.hud-lives .heart.pop{animation:heartPop .3s;}
 #nextbar{
   position:absolute;top:58px;left:0;right:0;z-index:5;
   display:flex;align-items:center;justify-content:center;
@@ -281,7 +291,8 @@ body{
       <input id="nameInput" maxlength="12" placeholder="예) 복지왕" autocomplete="off" />
       <p class="howto">
         🍞 빵 접시를 <b>좌우로 끌어</b> 떨어지는 재료를 순서대로 받으세요.<br>
-        ✨ 떠다니는 <b>보너스 글자</b>를 탭하면 추가 점수!<br>
+        ✨ 떠다니는 <b>보너스 글자</b>를 탭하면 추가 점수! <b>6개 모으면 하트 +1</b><br>
+        ❤️ 엉뚱한 재료를 받으면 <b>한 겹 무너지고</b> 하트 1개 감소 (하트를 모두 잃으면 게임 오버 · 최대 6개)<br>
         🥪 8단 샌드위치를 완성하면 클리어 → 책 보러가기
       </p>
       <button class="btn btn-primary" id="startBtn" style="margin-top:14px;">게임 시작 ▶</button>
@@ -293,6 +304,10 @@ body{
   <section id="screen-game" class="screen">
     <div id="hud">
       <div class="hud-score">SCORE<b id="scoreNum">0</b></div>
+      <div class="hud-center">
+        <div class="hud-lives" id="livesBox"></div>
+        <div class="bonus-gauge" id="bonusGauge"></div>
+      </div>
       <div class="hud-right"><div class="timer" id="timer">0.0s</div>COMBO ×<span id="combo">1</span></div>
     </div>
     <div id="nextbar">
@@ -392,6 +407,7 @@ function newGame(){
   return {
     running:false, t0:0, elapsed:0,
     score:0, combo:1, bestCombo:1, correctCatches:0, wrongCatches:0, bonusHits:0, bonusScore:0, bonusCollected:{},
+    lives:3, maxLives:6, bonusToHeart:0,
     targetIdx:0,
     catcher:{ x:0, tx:0, w:118 },
     items:[], words:[], stack:[],
@@ -640,6 +656,27 @@ function buildProgress(){
 }
 function refreshProgress(){ document.querySelectorAll('#progress .dot').forEach(d=>{ d.classList.toggle('done', +d.dataset.i < state.targetIdx); }); }
 
+const HEART_SVG = '<svg class="heart" viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-10-9.3C.4 8.4 2 5 5.3 5c2 0 3.4 1.2 4.2 2.4l.5.8.5-.8C11.3 6.2 12.7 5 14.7 5 18 5 19.6 8.4 22 11.7 19.5 16.4 12 21 12 21z" fill="#ff5b6e" stroke="#fff" stroke-width="1.2"/></svg>';
+function buildLives(){
+  const box = $('#livesBox'); if(!box) return;
+  box.innerHTML = Array(state.maxLives).fill(HEART_SVG).join('');
+}
+function updateLives(){
+  const hearts = document.querySelectorAll('#livesBox .heart');
+  hearts.forEach((h,i)=>{
+    const lost = i >= state.lives;
+    if(lost && !h.classList.contains('lost')){ h.classList.add('pop'); setTimeout(()=>h.classList.remove('pop'),300); }
+    h.classList.toggle('lost', lost);
+  });
+}
+function updateBonusGauge(){
+  const g = $('#bonusGauge'); if(!g) return;
+  const filled = state.bonusToHeart % 6;
+  let html='';
+  for(let i=0;i<6;i++){ html += `<span class="seg ${i<filled?'on':''}"></span>`; }
+  g.innerHTML = html + `<span class="glabel">×6 → ❤️</span>`;
+}
+
 /* =====================================================================
    루프
    ===================================================================== */
@@ -701,9 +738,22 @@ function onCatch(it){
     state.wrongCatches++;
     state.combo = 1;
     state.score = Math.max(0, state.score-5);
-    popup(it.x, H-90, '-5', '#c0392b');
+    // 쌓인 재료가 있으면 맨 위 한 겹이 무너진다
+    if(state.stack.length > 0){
+      state.stack.pop();
+      state.targetIdx = Math.max(0, state.targetIdx-1);
+      refreshProgress();
+      const nb=document.getElementById('nextbar'); if(nb){ nb.classList.remove('flash'); void nb.offsetWidth; nb.classList.add('flash'); }
+      popup(it.x, H-90, '한 겹 무너짐!', '#c0392b');
+    } else {
+      popup(it.x, H-90, '-5', '#c0392b');
+    }
+    // 목숨 감소
+    state.lives--;
+    updateLives();
     app.classList.add('shake'); setTimeout(()=>app.classList.remove('shake'),250);
     buzz(35); SFX.play('wrong');
+    if(state.lives <= 0){ endGame(false); }
   }
 }
 
@@ -752,8 +802,24 @@ function tryBonus(x,y){
       const b = wd.b;
       state.bonusHits++; state.bonusScore += b.pts; state.score += b.pts;
       state.bonusCollected[b.word] = (state.bonusCollected[b.word]||0) + 1;
-      popup(wd.x, wd.y, b.emoji+' +'+b.pts, b.color);
+      state.bonusToHeart++;
+      popup(wd.x, wd.y, '+'+b.pts, b.color);
       state.words.splice(i,1); buzz(18); SFX.play('bonus', b.pitch);
+      updateBonusGauge();
+      // 보너스 6개를 모으면 하트 1개 회복(최대치 한도 내)
+      if(state.bonusToHeart >= 6){
+        state.bonusToHeart -= 6;
+        if(state.lives < state.maxLives){
+          state.lives++;
+          updateLives();
+          popup(W/2, H*0.5, '❤️ 하트 +1!', '#ff5b6e');
+          SFX.play('win');
+        } else {
+          state.score += 50;
+          popup(W/2, H*0.5, '하트 가득! +50', '#3e6b58');
+        }
+        updateBonusGauge();
+      }
       return true;
     }
   }
@@ -789,7 +855,7 @@ function startGame(){
   resize();
   state = newGame();
   state.catcher.x = state.catcher.tx = W/2;
-  buildProgress(); refreshProgress(); updateHUD();
+  buildProgress(); refreshProgress(); buildLives(); updateLives(); updateBonusGauge(); updateHUD();
   state.running = true; state.lastFrame=0; state.t0 = performance.now();
   requestAnimationFrame(tick);
 }
@@ -804,9 +870,9 @@ async function endGame(win){
   const final = base + completionBonus + speedBonus;
   state.final = final;
 
-  $('#resultEmoji').textContent = win ? '🥪' : '⏱️';
-  $('#resultTitle').textContent = win ? '샌드위치 완성!' : '게임 종료';
-  $('#resultSub').textContent = win ? '생존 레시피를 마스터했어요' : '다시 도전해보세요';
+  $('#resultEmoji').textContent = win ? '🥪' : '💔';
+  $('#resultTitle').textContent = win ? '샌드위치 완성!' : '게임 오버';
+  $('#resultSub').textContent = win ? '생존 레시피를 마스터했어요' : '하트가 모두 소진됐어요 · 다시 도전!';
 
   const ingPoints = base - state.bonusScore;
   const kw = BONUS.filter(b=>state.bonusCollected[b.word])
