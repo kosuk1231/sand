@@ -47,14 +47,40 @@ body{
 
 /* ---------- ENTRY ---------- */
 #screen-entry{
-  padding:30px 26px;justify-content:flex-start;gap:18px;
+  padding:26px 24px calc(26px + env(safe-area-inset-bottom));
+  justify-content:flex-start;gap:16px;
+  overflow-y:auto;-webkit-overflow-scrolling:touch;
   background:
     radial-gradient(120% 60% at 80% 0%, #4a7b66 0%, var(--green) 60%);
 }
-.brandtag{
-  font-family:'Gaegu',cursive;font-weight:700;
-  color:#f6d7cf;font-size:15px;letter-spacing:.5px;
+.prize{
+  position:relative;overflow:hidden;flex-shrink:0;
+  background:linear-gradient(135deg,#ee7e6b,#e0654f);
+  border:none;border-radius:16px;
+  padding:16px 16px 15px;margin-top:4px;
+  box-shadow:0 10px 24px rgba(224,101,79,.38);
 }
+.prize::after{
+  content:"";position:absolute;top:-60%;left:-30%;width:60%;height:220%;
+  background:linear-gradient(90deg,transparent,#ffffff55,transparent);
+  transform:rotate(18deg);animation:shine 3.2s ease-in-out infinite;
+}
+@keyframes shine{0%{left:-40%;}55%,100%{left:130%;}}
+.prize-top{display:flex;align-items:center;gap:9px;position:relative;z-index:1;}
+.prize-badge{
+  background:#fff;color:var(--coral-dark);font-family:'Black Han Sans',sans-serif;
+  font-size:13px;border-radius:999px;padding:4px 11px;letter-spacing:.5px;
+  box-shadow:0 2px 6px rgba(0,0,0,.18);
+}
+.prize-dday{margin-left:auto;color:#fff;font-family:'Black Han Sans',sans-serif;font-size:13px;
+  background:#ffffff33;border-radius:999px;padding:4px 11px;}
+.prize-head{
+  position:relative;z-index:1;margin-top:9px;
+  font-family:'Black Han Sans',sans-serif;color:#fff;font-size:18px;line-height:1.35;
+  text-shadow:0 1px 2px rgba(0,0,0,.18);
+}
+.prize-head .hl{color:#fff2c2;}
+.prize-sub{position:relative;z-index:1;margin-top:5px;color:#ffe7df;font-size:12.5px;line-height:1.5;}
 .title{
   font-family:'Black Han Sans',sans-serif;
   color:#fff;font-size:34px;line-height:1.18;letter-spacing:-.5px;
@@ -69,7 +95,7 @@ body{
   border-top:1px solid #ffffff30;padding-top:10px;
 }
 .card{
-  margin-top:auto;
+  margin-top:4px;flex-shrink:0;
   background:var(--paper);
   border-radius:18px;padding:20px 18px 22px;
   box-shadow:0 12px 30px rgba(0,0,0,.22);
@@ -198,10 +224,18 @@ body{
 
   <!-- ENTRY -->
   <section id="screen-entry" class="screen active">
-    <div class="brandtag">🥪 책글사람 미니게임</div>
     <h1 class="title">샌드위치<br><span class="accent">사회복지사</span> 생존기술</h1>
     <p class="subtitle">재료를 받아 나만의 생존 샌드위치를 완성하라!<br>중간관리자 6인의 사회복지 실무 레시피</p>
     <div class="authors">고석우 · 김남일 · 김민재 · 김소영 · 임현준 · 최미정</div>
+
+    <div class="prize">
+      <div class="prize-top">
+        <span class="prize-badge">🏆 1등 경품</span>
+        <span class="prize-dday" id="prizeDday">~6.8 마감</span>
+      </div>
+      <div class="prize-head">펀딩 기간 <span class="hl">명예의 전당 1위</span> 단 한 분께<br>저자 6인 <span class="hl">친필 사인본</span>을 드립니다!</div>
+      <div class="prize-sub">⏰ 펀딩 마감: 2026. 6. 8 · 최고 점수에 도전하세요</div>
+    </div>
 
     <div class="card">
       <h2>플레이어 등록</h2>
@@ -262,8 +296,8 @@ const CONFIG = {
   BOOK_URL: "https://airbridge.tumblbug.com/o61c3bc",
 
   // 2) Supabase 랭킹 (비워두면 자동으로 '브라우저 임시 랭킹'으로 동작)
-  SUPABASE_URL: "https://wyujpduwibqiitvqemxg.supabase.co",        // 예: https://xxxx.supabase.co
-  SUPABASE_ANON_KEY: "sb_publishable_47ZHkjmJvQlYlte7A2qErQ_hlat_T9t",   // anon public key
+  SUPABASE_URL: "",        // 예: https://xxxx.supabase.co
+  SUPABASE_ANON_KEY: "",   // anon public key
   TABLE: "leaderboard",
 };
 
@@ -754,6 +788,15 @@ $('#shareBtn').addEventListener('click', async ()=>{
 $('#nameInput').addEventListener('keydown', e=>{ if(e.key==='Enter') $('#startBtn').click(); });
 
 /* init */
+/* 펀딩 마감 D-day 자동 표시 (마감일: 2026-06-08, 텀블벅 '남은 기간' 방식) */
+(function(){
+  const el = document.getElementById('prizeDday'); if(!el) return;
+  const startOfToday = new Date(); startOfToday.setHours(0,0,0,0);
+  const end = new Date(2026,5,8,0,0,0,0); // 6월 8일(마지막 날)
+  const days = Math.round((end - startOfToday)/86400000);
+  el.textContent = days > 1 ? (days+'일 남음') : days===1 ? '내일 마감' : days===0 ? '오늘 마감' : '펀딩 종료';
+})();
+
 LB.init();
 window.addEventListener('load', resize);
 resize();
